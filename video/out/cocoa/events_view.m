@@ -54,7 +54,7 @@
 - (void)setFullScreen:(BOOL)willBeFullscreen
 {
     if (willBeFullscreen && ![self isInFullScreenMode]) {
-        NSApplicationPresentationOptions popts =
+        /*NSApplicationPresentationOptions popts =
             NSApplicationPresentationDefault;
 
         if ([self hasMenubar:[self.adapter fsScreen]])
@@ -70,16 +70,16 @@
         NSDictionary *fsopts = @{
             NSFullScreenModeAllScreens : @([self.adapter fsModeAllScreens]),
             NSFullScreenModeApplicationPresentationOptions : @(popts)
-        };
+        };*/
 
         // The original "windowed" window will stay around since sending a
         // view fullscreen wraps it in another window. This is noticeable when
         // sending the View fullscreen to another screen. Make it go away
         // manually.
-        [self.window orderOut:self];
+        //[self.window orderOut:self];
 
         [self enterFullScreenMode:[self.adapter fsScreen]
-                                  withOptions:fsopts];
+                                  withOptions:nil];
     }
 
     if (!willBeFullscreen && [self isInFullScreenMode]) {

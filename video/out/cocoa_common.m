@@ -111,6 +111,8 @@ struct vo_cocoa_state {
     NSCursor *blankCursor;
 
     char *window_title;
+    
+    bool is_fs;
 };
 
 static void run_on_main_thread(struct vo *vo, void(^block)(void))
@@ -757,6 +759,25 @@ static int vo_cocoa_fullscreen(struct vo *vo)
     vo_cocoa_update_screen_info(vo, NULL);
 
     draw_changes_after_next_frame(vo);
+    
+    NSScreen *screen = vo->opts->fullscreen ? s->fs_screen : s->current_screen;
+    NSDictionary* sinfo = [screen deviceDescription];
+    NSNumber* sid = [sinfo objectForKey:@"NSScreenNumber"];
+    CGDirectDisplayID did = [sid longValue];
+    
+    if (opts->fullscreen && !s->is_fs) {
+        s->is_fs = true;
+        if (CGDisplayCapture(did) != kCGErrorSuccess) {
+            //NSLog( @"Couldn't capture the secondary display" );
+        }
+    }
+    else {
+        s->is_fs = false;
+        if (CGDisplayRelease( kCGDirectMainDisplay ) != kCGErrorSuccess) {
+            //NSLog( @"Couldn't capture the secondary display" );
+        }
+    } 
+    
     [(MpvEventsView *)s->view setFullScreen:opts->fullscreen];
 
     if ([s->view window] != s->window) {
