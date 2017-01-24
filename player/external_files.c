@@ -6,6 +6,10 @@
 
 #include "osdep/io.h"
 
+#if HAVE_COCOA
+#include "osdep/macosx_strings.h"
+#endif
+
 #include "common/common.h"
 #include "common/global.h"
 #include "common/msg.h"
@@ -101,6 +105,11 @@ static void append_dir_subtitles(struct mpv_global *global,
     struct bstr f_fname_noext = bstrdup(tmpmem, bstr_strip_ext(f_fname));
     bstr_lower(f_fname_noext);
     struct bstr f_fname_trim = bstr_strip(f_fname_noext);
+    struct bstr f_fname_fuzz = bstrdup(tmpmem, f_fname_trim);
+
+    #if HAVE_COCOA
+    f_fname_fuzz = bstr0(cocoa_decompose_string(tmpmem, f_fname_fuzz.start));
+    #endif
 
     // 0 = nothing
     // 1 = any subtitle file
@@ -159,7 +168,7 @@ static void append_dir_subtitles(struct mpv_global *global,
         }
         if (!prio && bstrcmp(tmp_fname_trim, f_fname_trim) == 0)
             prio = 3; // matches the movie name
-        if (!prio && bstr_find(tmp_fname_trim, f_fname_trim) >= 0 && fuzz >= 1)
+        if (!prio && bstr_find(tmp_fname_trim, f_fname_fuzz) >= 0 && fuzz >= 1)
             prio = 2; // contains the movie name
         if (!prio) {
             // doesn't contain the movie name
