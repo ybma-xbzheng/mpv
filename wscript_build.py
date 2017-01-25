@@ -111,6 +111,11 @@ def build(ctx):
         'darwin': 'osdep/timer-darwin.c',
     }.get(ctx.env.DEST_OS, "osdep/timer-linux.c")
 
+    if ctx.dependency_satisfied('cocoa'):
+        normalize = 'osdep/normalize-macosx.m'
+    else:
+        normalize = 'osdep/normalize.c'
+
     sources = [
         ## Audio
         ( "audio/audio.c" ),
@@ -411,11 +416,11 @@ def build(ctx):
         ( "osdep/timer.c" ),
         ( timer_c ),
         ( "osdep/threads.c" ),
+        ( normalize ),
 
         ( "osdep/ar/HIDRemote.m",                "apple-remote" ),
         ( "osdep/macosx_application.m",          "cocoa" ),
         ( "osdep/macosx_events.m",               "cocoa" ),
-        ( "osdep/macosx_strings.m",              "cocoa" ),
         ( "osdep/semaphore_osx.c" ),
         ( "osdep/subprocess.c" ),
         ( "osdep/subprocess-posix.c",            "posix-spawn" ),

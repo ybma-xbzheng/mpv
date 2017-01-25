@@ -5,10 +5,7 @@
 #include <assert.h>
 
 #include "osdep/io.h"
-
-#if HAVE_COCOA
-#include "osdep/macosx_strings.h"
-#endif
+#include "osdep/normalize.h"
 
 #include "common/common.h"
 #include "common/global.h"
@@ -105,11 +102,8 @@ static void append_dir_subtitles(struct mpv_global *global,
     struct bstr f_fname_noext = bstrdup(tmpmem, bstr_strip_ext(f_fname));
     bstr_lower(f_fname_noext);
     struct bstr f_fname_trim = bstr_strip(f_fname_noext);
-    struct bstr f_fname_fuzz = bstrdup(tmpmem, f_fname_trim);
-
-    #if HAVE_COCOA
-    f_fname_fuzz = bstr0(cocoa_decompose_string(tmpmem, f_fname_fuzz.start));
-    #endif
+    char *normalized = mp_normalize_input_string(tmpmem, f_fname_trim.start);
+    struct bstr f_fname_fuzz = bstr0(normalized);
 
     // 0 = nothing
     // 1 = any subtitle file

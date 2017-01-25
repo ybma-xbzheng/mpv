@@ -1,9 +1,9 @@
 #import <Foundation/Foundation.h>
 #include "mpv_talloc.h"
 
-#include "macosx_strings.h"
+#include "normalize.h"
 
-void *cocoa_decompose_string(void *talloc_ctx, char *string)
+const char *mp_normalize_input_string(void *talloc_ctx, char *string)
 {
     char *string_decomposed = string;
     NSString *string_tmp = [[NSString alloc] initWithUTF8String:string];
