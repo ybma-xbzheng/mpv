@@ -717,6 +717,17 @@ int vo_cocoa_config_window(struct vo *vo)
                 queue_new_video_size(vo, width, height);
             if (opts->fullscreen && !s->fullscreen)
                 vo_cocoa_fullscreen(vo);
+
+            void (^nblock)(NSNotification *n) = ^(NSNotification *n) {
+                [s->nsgl_ctx update];
+            };
+
+            [[NSNotificationCenter defaultCenter]
+                addObserverForName:NSViewGlobalFrameDidChangeNotification
+                            object:s->video
+                             queue:nil
+                        usingBlock:nblock];
+
             cocoa_set_window_title(vo);
             vo_set_level(vo, opts->ontop, opts->ontop_level);
 
