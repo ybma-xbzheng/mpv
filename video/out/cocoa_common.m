@@ -74,8 +74,8 @@ struct vo_cocoa_state {
     NSInteger window_level;
     int fullscreen;
 
-    bool cursor_visibility;
     bool cursor_visibility_wanted;
+    NSTimer *cursor_update_task;
 
     bool embedded; // wether we are embedding in another GUI
 
@@ -358,7 +358,6 @@ void vo_cocoa_init(struct vo *vo)
         .power_mgmt_assertion = kIOPMNullAssertionID,
         .log = mp_log_new(s, vo->log, "cocoa"),
         .embedded = vo->opts->WinID >= 0,
-        .cursor_visibility = true,
         .cursor_visibility_wanted = true,
         .fullscreen = 0,
     };
@@ -388,12 +387,10 @@ static int vo_cocoa_update_cursor_visibility(struct vo *vo, bool forceVisible)
         MpvEventsView *v = (MpvEventsView *) s->view;
         bool visibility = !(!s->cursor_visibility_wanted && [v canHideCursor]);
 
-        if ((forceVisible || visibility) && !s->cursor_visibility) {
-            [NSCursor unhide];
-            s->cursor_visibility = YES;
-        } else if (!visibility && s->cursor_visibility) {
-            [NSCursor hide];
-            s->cursor_visibility = NO;
+        if (forceVisible || visibility) {
+            [NSCursor setHiddenUntilMouseMoves: NO];
+        } else if (!visibility) {
+            [NSCursor setHiddenUntilMouseMoves: YES];
         }
     }
     return VO_TRUE;
@@ -413,6 +410,7 @@ void vo_cocoa_uninit(struct vo *vo)
     run_on_main_thread(vo, ^{
         // if using --wid + libmpv there's no window to release
         if (s->window) {
+            [s->cursor_update_task invalidate];
             vo_cocoa_update_cursor_visibility(vo, true);
             [s->window setDelegate:nil];
             [s->window close];
@@ -696,6 +694,13 @@ int vo_cocoa_config_window(struct vo *vo)
             cocoa_set_window_title(vo);
             vo_set_level(vo, opts->ontop, opts->ontop_level);
 
+            s->cursor_update_task = [NSTimer
+                     scheduledTimerWithTimeInterval:1
+                                             target:s->adapter
+                                         selector:@selector(updateCursor:)
+                                           userInfo:nil
+                                            repeats:YES];
+
             GLint o;
             if (!CGLGetParameter(s->cgl_ctx, kCGLCPSurfaceOpacity, &o) && !o) {
                 [s->window setOpaque:NO];
@@ -940,6 +945,11 @@ int vo_cocoa_control(struct vo *vo, int *events, int request, void *arg)
     }
 
     [self.vout->cocoa->window setMovableByWindowBackground:movable];
+}
+
+- (void)updateCursor:(NSTimer *)timer
+{
+    vo_cocoa_update_cursor_visibility(self.vout, false);
 }
 
 - (void)signalMouseMovement:(NSPoint)point
