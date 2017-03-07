@@ -111,18 +111,24 @@
 - (void)setToFullScreen
 {
     [self setStyleMask:([self styleMask] | NSWindowStyleMaskFullScreen)];
-    NSRect frame = [[self targetScreen] frame];
+    NSRect frame = [self calculateWindowPositionForScreen:[self targetScreen]
+                    withoutBounds:[[self targetScreen] isEqual:[self screen]]];
     [self setFrame:frame display:YES];
+
+    //NSRect frame = [[self targetScreen] frame];
+    //[self setFrame:frame display:YES];
 }
 
 - (void)setToWindow
 {
     [self setStyleMask:([self styleMask] & ~NSWindowStyleMaskFullScreen)];
-    NSRect frame = [self calculateWindowPositionForScreen:[self targetScreen]
+
+
+    /*NSRect frame = [self calculateWindowPositionForScreen:[self targetScreen]
                     withoutBounds:[[self targetScreen] isEqual:[self screen]]];
     [self setFrame:frame display:YES];
     [self setContentAspectRatio:_unfs_content_frame.size];
-    [self setCenteredContentSize:_unfs_content_frame.size];
+    [self setCenteredContentSize:_unfs_content_frame.size];*/
 }
 
 - (NSArray *)customWindowsToEnterFullScreenForWindow:(NSWindow *)window
@@ -136,9 +142,47 @@
 }
 
 // we still need to keep those around or it will use the standard animation
-- (void)window:(NSWindow *)window startCustomAnimationToEnterFullScreenWithDuration:(NSTimeInterval)duration {}
+- (void)window:(NSWindow *)window startCustomAnimationToEnterFullScreenWithDuration:(NSTimeInterval)duration
+{
+    NSRect frame = [[self targetScreen] frame];
+    //frame.size.height -= 10;
+    //[self.adapter setBackingStore:_unfs_content_frame.size];
 
-- (void)window:(NSWindow *)window startCustomAnimationToExitFullScreenWithDuration:(NSTimeInterval)duration {}
+    [NSAnimationContext runAnimationGroup:^(NSAnimationContext *context) {
+        [context setDuration:duration*0.9];
+        [[window animator] setFrame:frame display:YES];
+    } completionHandler:^{
+        //NSRect frame2 = frame;
+        //frame2.size.height += 10;
+        //[self.adapter setBackingStore:frame2.size];
+        //[self.adapter resetBackingStore];
+        //[self setFrame:frame2 display:YES];
+        //_is_animating = 0;
+        //[self.adapter resetBackingStore];
+    }];
+}
+
+- (void)window:(NSWindow *)window startCustomAnimationToExitFullScreenWithDuration:(NSTimeInterval)duration
+{
+    NSRect frame = [self calculateWindowPositionForScreen:[self targetScreen]
+                    withoutBounds:[[self targetScreen] isEqual:[self screen]]];
+    //[self.adapter setBackingStore:[self screen].frame.size];
+    //frame.size.height += 10;
+
+    [NSAnimationContext runAnimationGroup:^(NSAnimationContext *context) {
+        [context setDuration:duration];
+        [[window animator] setFrame:frame display:YES];
+    } completionHandler:^{
+        //NSRect frame2 = frame;
+        //frame2.size.height -= 10;
+        //[self.adapter setBackingStore:frame2.size];
+        //[self.adapter resetBackingStore];
+        //[self setFrame:frame2 display:YES];
+        [self setContentAspectRatio:_unfs_content_frame.size];
+        [self setCenteredContentSize:_unfs_content_frame.size];
+        //_is_animating = 0;
+    }];
+}
 
 - (void)windowDidEnterFullScreen:(NSNotification *)notification
 {
@@ -388,8 +432,8 @@
 - (void)windowDidEndLiveResize:(NSNotification *)notification
 {
     [self.adapter windowDidEndLiveResize:notification];
-    [self setFrame:[self constrainFrameRect:self.frame toScreen:self.screen]
-           display:NO];
+    //[self setFrame:[self constrainFrameRect:self.frame toScreen:self.screen]
+    //       display:YES];
 }
 
 - (void)tryDequeueSize

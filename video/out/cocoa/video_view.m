@@ -33,6 +33,7 @@
 
 - (void)setFrameSize:(NSSize)size
 {
+    //printf("MpvVideoView setFrameSize\n");
     [super setFrameSize:size];
     [self.adapter setNeedsResize];
 }
@@ -45,6 +46,7 @@
 
 - (void)drawRect:(NSRect)rect
 {
+    //printf("MpvVideoView drawRect\n");
     [self.adapter performAsyncResize:[self frameInPixels].size];
 }
 @end

@@ -79,7 +79,13 @@ struct vo_cocoa_state {
     bool window_is_dragged;
     id event_monitor_mouseup;
 
+    int bs_width;
+    int bs_height;
+    int bs_reset;
+
     bool embedded; // wether we are embedding in another GUI
+
+    atomic_bool waiting_frame;
 
     IOPMAssertionID power_mgmt_assertion;
     io_connect_t light_sensor;
@@ -380,6 +386,8 @@ void vo_cocoa_init(struct vo *vo)
         .cursor_visibility = true,
         .cursor_visibility_wanted = true,
         .fullscreen = 0,
+        .bs_width = -1,
+        .bs_height = -1,
     };
     pthread_mutex_init(&s->lock, NULL);
     pthread_cond_init(&s->wakeup, NULL);
@@ -746,13 +754,18 @@ static void resize_event(struct vo *vo)
 {
     struct vo_cocoa_state *s = vo->cocoa;
     NSRect frame = [s->video frameInPixels];
+    printf("resize_event %d\n", s->bs_width);
+    if (s->bs_width > 0)
+        return;
+
+    printf("resize_event after\n");
 
     pthread_mutex_lock(&s->lock);
     s->vo_dwidth  = frame.size.width;
     s->vo_dheight = frame.size.height;
     s->pending_events |= VO_EVENT_RESIZE | VO_EVENT_EXPOSE;
     // Live-resizing: make sure at least one frame will be drawn
-    s->frame_w = s->frame_h = 0;
+    //s->frame_w = s->frame_h = 0;
     pthread_mutex_unlock(&s->lock);
 
     [s->nsgl_ctx update];
@@ -764,9 +777,29 @@ static void vo_cocoa_resize_redraw(struct vo *vo, int width, int height)
 {
     struct vo_cocoa_state *s = vo->cocoa;
 
+
+    /*NSRect frame = [s->video frameInPixels];
+    printf("---------------------------------before-------------------------------------\n");
+    printf("vo_cocoa_fullscreen s->video w: %f h: %f\n", frame.size.width, frame.size.height);
+    printf("vo_cocoa_fullscreen s->vo_dx w: %d h: %d\n", s->vo_dwidth, s->vo_dheight);
+    printf("vo_cocoa_fullscreen vo->dx w: %d h: %d\n", vo->dwidth, vo->dheight);
+    printf("vo_cocoa_fullscreen s->frame_x w: %d h: %d\n", s->frame_w, s->frame_h);
+    printf("vo_cocoa_fullscreen s->old_dx w: %d h: %d\n", s->old_dwidth, s->old_dheight);*/
+
+
     resize_event(vo);
 
-    pthread_mutex_lock(&s->lock);
+
+    /*frame = [s->video frameInPixels];
+    printf("---------------------------------after-------------------------------------\n");
+    printf("vo_cocoa_fullscreen s->video w: %f h: %f\n", frame.size.width, frame.size.height);
+    printf("vo_cocoa_fullscreen s->vo_dx w: %d h: %d\n", s->vo_dwidth, s->vo_dheight);
+    printf("vo_cocoa_fullscreen vo->dx w: %d h: %d\n", vo->dwidth, vo->dheight);
+    printf("vo_cocoa_fullscreen s->frame_x w: %d h: %d\n", s->frame_w, s->frame_h);
+    printf("vo_cocoa_fullscreen s->old_dx w: %d h: %d\n", s->old_dwidth, s->old_dheight);
+    printf("---------------------------------------------------------------------------\n");*/
+
+    /*pthread_mutex_lock(&s->lock);
 
     // Wait until a new frame with the new size was rendered. For some reason,
     // Cocoa requires this to be done before drawRect() returns.
@@ -776,7 +809,14 @@ static void vo_cocoa_resize_redraw(struct vo *vo, int width, int height)
             break;
     }
 
-    pthread_mutex_unlock(&s->lock);
+    pthread_mutex_unlock(&s->lock);*/
+}
+
+static void draw_changes_after_next_frame(struct vo *vo)
+{
+    struct vo_cocoa_state *s = vo->cocoa;
+    if (atomic_compare_exchange_strong(&s->waiting_frame, &(bool){false}, true))
+        NSDisableScreenUpdates();
 }
 
 void vo_cocoa_swap_buffers(struct vo *vo)
@@ -800,8 +840,14 @@ void vo_cocoa_swap_buffers(struct vo *vo)
     pthread_mutex_lock(&s->lock);
     s->frame_w = vo->dwidth;
     s->frame_h = vo->dheight;
-    pthread_cond_signal(&s->wakeup);
+    while(s->bs_reset) {
+        pthread_cond_wait(&s->wakeup, &s->lock);
+    }
+    //pthread_cond_signal(&s->wakeup);
     pthread_mutex_unlock(&s->lock);
+
+    if (atomic_compare_exchange_strong(&s->waiting_frame, &(bool){true}, false))
+        NSEnableScreenUpdates();
 }
 
 static int vo_cocoa_check_events(struct vo *vo)
@@ -812,9 +858,13 @@ static int vo_cocoa_check_events(struct vo *vo)
     int events = s->pending_events;
     s->pending_events = 0;
     if (events & VO_EVENT_RESIZE) {
-        vo->dwidth  = s->vo_dwidth;
-        vo->dheight = s->vo_dheight;
+        vo->dwidth  = s->bs_width > 0 ? s->bs_width : s->vo_dwidth;
+        vo->dheight = s->bs_height > 0 ? s->bs_height : s->vo_dheight;
     }
+
+    printf("vo_cocoa_check_events vo->dx w: %d h: %d\n", vo->dwidth, vo->dheight);
+    printf("vo_cocoa_check_events s->vo_dx w: %d h: %d\n", s->vo_dwidth, s->vo_dheight);
+
     pthread_mutex_unlock(&s->lock);
 
     return events;
@@ -937,6 +987,7 @@ int vo_cocoa_control(struct vo *vo, int *events, int request, void *arg)
 
 - (void)performAsyncResize:(NSSize)size
 {
+    //printf("MpvCocoaAdapter performAsyncResize\n");
     struct vo_cocoa_state *s = self.vout->cocoa;
     vo_cocoa_resize_redraw(self.vout, size.width, size.height);
 }
@@ -953,6 +1004,7 @@ int vo_cocoa_control(struct vo *vo, int *events, int request, void *arg)
 
 - (void)setNeedsResize
 {
+    //printf("MpvCocoaAdapter setNeedsResize\n");
     resize_event(self.vout);
 }
 
@@ -1040,17 +1092,117 @@ int vo_cocoa_control(struct vo *vo, int *events, int request, void *arg)
     s->pending_events |= VO_EVENT_FULLSCREEN_STATE;
 }
 
+
+/*- (void)setBackingStore:(NSSize)ns
+{
+    struct vo_cocoa_state *s = self.vout->cocoa;
+
+    printf("setBackingStore ns w: %f h: %f\n", ns.width, ns.height);
+
+    s->bs_width = ns.width;
+    s->bs_height = ns.height;
+
+    printf("setBackingStore s->bs_x w: %d h: %d\n", s->bs_width, s->bs_height);
+
+    GLint dim[2] = { ns.width , ns.height };
+    CGLSetParameter(s->cgl_ctx, kCGLCPSurfaceBackingSize, dim);
+    CGLEnable(s->cgl_ctx, kCGLCESurfaceBackingSize);
+
+    //resize_event(self.vout);
+}
+
+- (void)resetBackingStore
+{
+    struct vo_cocoa_state *s = self.vout->cocoa;
+
+    s->bs_reset = 1;
+    s->bs_width = 0;
+    s->bs_height = 0;
+
+    GLint dim[2] = { 0 , 0 };
+    CGLSetParameter(s->cgl_ctx, kCGLCPSurfaceBackingSize, dim);
+    CGLDisable(s->cgl_ctx, kCGLCESurfaceBackingSize);
+
+    draw_changes_after_next_frame(self.vout);
+    pthread_mutex_lock(&s->lock);
+    [NSOpenGLContext clearCurrentContext];
+    [s->nsgl_ctx clearDrawable];
+    [s->nsgl_ctx setView:s->video];
+    [s->nsgl_ctx makeCurrentContext];
+    [s->nsgl_ctx update];
+
+    s->bs_reset = 0;
+    pthread_cond_signal(&s->wakeup);
+    pthread_mutex_unlock(&s->lock);
+
+    resize_event(self.vout);
+}*/
+
+
+
 - (void)windowWillStartLiveResize:(NSNotification *)notification
 {
+    //printf("windowWillStartLiveResize\n");
     // Make vo.c not do video timing, which would slow down resizing.
-    vo_event(self.vout, VO_EVENT_LIVE_RESIZING);
-    vo_cocoa_stop_displaylink(self.vout->cocoa);
+    //vo_event(self.vout, VO_EVENT_LIVE_RESIZING);
+    //vo_cocoa_stop_displaylink(self.vout->cocoa);
+
+    struct vo_cocoa_state *s = self.vout->cocoa;
+
+    NSRect frame = [s->video frameInPixels];
+    printf("windowWillStartLiveResize w: %f h: %f\n", frame.size.width, frame.size.height);
+
+    s->bs_width = frame.size.width;
+    s->bs_height = frame.size.height;
+
+    GLint dim[2] = { frame.size.width, frame.size.height };
+    CGLSetParameter(s->cgl_ctx, kCGLCPSurfaceBackingSize, dim);
+    CGLEnable(s->cgl_ctx, kCGLCESurfaceBackingSize);
 }
 
 - (void)windowDidEndLiveResize:(NSNotification *)notification
 {
-    vo_query_and_reset_events(self.vout, VO_EVENT_LIVE_RESIZING);
-    vo_cocoa_start_displaylink(self.vout->cocoa);
+    //printf("windowDidEndLiveResize\n");
+    //vo_query_and_reset_events(self.vout, VO_EVENT_LIVE_RESIZING);
+    //vo_cocoa_start_displaylink(self.vout->cocoa);
+
+    struct vo_cocoa_state *s = self.vout->cocoa;
+
+    NSRect frame = [s->video frameInPixels];
+
+    s->bs_reset = 1;
+    s->bs_width = 0;
+    s->bs_height = 0;
+
+    GLint dim[2] = { 0 , 0 };
+    CGLSetParameter(s->cgl_ctx, kCGLCPSurfaceBackingSize, dim);
+    CGLDisable(s->cgl_ctx, kCGLCESurfaceBackingSize);
+
+    //draw_changes_after_next_frame(self.vout);
+    pthread_mutex_lock(&s->lock);
+    [NSOpenGLContext clearCurrentContext];
+    [s->nsgl_ctx clearDrawable];
+    [s->nsgl_ctx setView:s->video];
+    [s->nsgl_ctx makeCurrentContext];
+    [s->nsgl_ctx update];
+
+    s->bs_reset = 0;
+    pthread_cond_signal(&s->wakeup);
+    pthread_mutex_unlock(&s->lock);
+
+    resize_event(self.vout);
+
+
+    /*NSDisableScreenUpdates();
+    NSRect frame2 = [s->window frame];
+    frame2.size.width += 1;
+    [s->window setFrame:frame2 display:YES];
+    frame2.size.width -= 1;
+    [s->window setFrame:frame2 display:YES];
+    NSEnableScreenUpdates();*/
+
+
+    //printf("windowDidEndLiveResize w: %f h: %f\n", frame.size.width, frame.size.height);
 }
 
 - (void)didChangeWindowedScreenProfile:(NSNotification *)notification

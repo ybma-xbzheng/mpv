@@ -29,6 +29,8 @@
 - (void)didChangeWindowedScreenProfile:(NSNotification *)notification;
 - (void)performAsyncResize:(NSSize)size;
 - (void)windowDidChangePhysicalScreen;
+- (void)setBackingStore:(NSSize)ns;
+- (void)resetBackingStore;
 
 - (BOOL)isInFullScreenMode;
 - (BOOL)keyboardEnabled;
