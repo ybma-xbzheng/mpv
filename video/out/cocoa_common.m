@@ -499,6 +499,9 @@ static void vo_set_level(struct vo *vo, int ontop, int ontop_level)
         case -2:
             s->window_level = NSStatusWindowLevel;
             break;
+        case -3:
+            s->window_level = kCGBackstopMenuLevel;
+            break;
         default:
             s->window_level = ontop_level;
         }

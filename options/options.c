@@ -162,7 +162,7 @@ static const m_option_t mp_vo_opt_list[] = {
     OPT_FLAG("snap-window", snap_window, 0),
     OPT_FLAG("ontop", ontop, 0),
     OPT_CHOICE_OR_INT("ontop-level", ontop_level, 0, 0, INT_MAX,
-                      ({"window", -1}, {"system", -2})),
+                      ({"window", -1}, {"system", -2}, {"desktop", -3})),
     OPT_FLAG("border", border, 0),
     OPT_FLAG("fit-border", fit_border, 0),
     OPT_FLAG("on-all-workspaces", all_workspaces, 0),
