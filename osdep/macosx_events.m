@@ -432,6 +432,8 @@ void cocoa_set_mpv_handle(struct mpv_handle *ctx)
         @(NX_KEYTYPE_NEXT):     @(MP_KEY_FORWARD),
     };
 
+    printf("-------handleMediaKey %d\n", mk_code(event));
+
     return [self handleKey:mk_code(event)
                   withMask:[self keyModifierMask:event]
                 andMapping:keymapd];
@@ -460,6 +462,8 @@ void cocoa_set_mpv_handle(struct mpv_handle *ctx)
         @(kHIDRemoteButtonCodeDown):       @(MP_AR_VDOWN),
         @(kHIDRemoteButtonCodeDownHold):   @(MP_AR_VDOWN_HOLD),
     };
+
+    printf("-------hidRemote %d\n", buttonCode);
 
     [self handleKey:buttonCode withMask:0 andMapping:keymapd];
 }
@@ -523,6 +527,8 @@ void cocoa_set_mpv_handle(struct mpv_handle *ctx)
     } else {
         chars = [event charactersIgnoringModifiers];
     }
+
+    printf("-------handleKey %d %s\n", event.keyCode, chars.UTF8String);
 
     struct bstr t = bstr0([chars UTF8String]);
     int key = convert_key([event keyCode], bstr_decode_utf8(t, &t));
