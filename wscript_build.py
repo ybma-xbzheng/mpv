@@ -142,8 +142,8 @@ def build(ctx):
     ctx(features = "ebml_definitions", target = "ebml_defs.c")
 
     def swift(task):
-        src = ' '.join([x.abspath() for x in task.inputs])
-        bridge = ctx.path.find_node("osdep/macOS_swift_bridge.h").abspath()
+        src = ' '.join([x.abspath() for x in task.inputs[1:]])
+        bridge = task.inputs[0].abspath()
         tgt = task.outputs[0].abspath()
         header = task.outputs[1].abspath()
         module = task.outputs[2].abspath()
@@ -156,6 +156,7 @@ def build(ctx):
 
     if ctx.dependency_satisfied('macos-cocoa-cb'):
         swift_source = [
+            ( "osdep/macOS_swift_bridge.h"),
             ( "osdep/macOS_mpv_helper.swift" ),
             ( "video/out/cocoa-cb/events_view.swift" ),
             ( "video/out/cocoa-cb/video_layer.swift" ),
@@ -179,6 +180,7 @@ def build(ctx):
 
     if True:
         swift_source = [
+            ( "video/out/metal/metal_swift_bridge.h"),
             ( "video/out/metal_common.swift" ),
             ( "video/out/metal/view.swift" ),
             ( "video/out/metal/window.swift" ),
