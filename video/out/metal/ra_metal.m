@@ -12,10 +12,89 @@ struct ra_layout metal_push_constant_layout(struct ra_renderpass_input *inp) {
 
 static struct ra_fns ra_fns_metal;
 
-struct ra *ra_create_metal(struct mp_log *log) {
+struct ra_metal {
+    id <MTLDevice> device;
+};
+
+struct metal_fmt {
+    const char *name;
+    MTLPixelFormat fmt;
+    int components;
+    int bytes;
+    int bits[4];
+    enum ra_ctype ctype;
+    bool unordered;
+};
+
+// https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf
+static struct metal_fmt formats[] = {
+    // Regular, byte-aligned integer formats
+    { "r8",        MTLPixelFormatR8Unorm,      1,  1, { 8            }, RA_CTYPE_UNORM },
+    { "rg8",       MTLPixelFormatRG8Unorm,     2,  2, { 8,  8        }, RA_CTYPE_UNORM },
+    { "rgba8",     MTLPixelFormatRGBA8Unorm,   4,  4, { 8,  8,  8,  8}, RA_CTYPE_UNORM },
+    { "r16",       MTLPixelFormatR16Unorm,     1,  2, {16            }, RA_CTYPE_UNORM },
+    { "rg16",      MTLPixelFormatRG16Unorm,    2,  4, {16, 16        }, RA_CTYPE_UNORM },
+    { "rgba16",    MTLPixelFormatRGBA16Unorm,  4,  8, {16, 16, 16, 16}, RA_CTYPE_UNORM },
+    { "rgb10a2",   MTLPixelFormatRGB10A2Unorm, 4,  4, {10, 10, 10,  2}, RA_CTYPE_UNORM },
+
+    // Special, integer-only formats
+    { "r8ui",      MTLPixelFormatR8Uint,       1,  1, { 8            }, RA_CTYPE_UINT },
+    { "rg8ui",     MTLPixelFormatRG8Uint,      2,  2, { 8,  8        }, RA_CTYPE_UINT },
+    { "rgba8ui",   MTLPixelFormatRGBA8Uint,    4,  4, { 8,  8,  8,  8}, RA_CTYPE_UINT },
+    { "r16ui",     MTLPixelFormatR16Uint,      1,  2, {16            }, RA_CTYPE_UINT },
+    { "rg16ui",    MTLPixelFormatRG16Uint,     2,  4, {16, 16        }, RA_CTYPE_UINT },
+    { "rgba16ui",  MTLPixelFormatRGBA16Uint,   4,  8, {16, 16, 16, 16}, RA_CTYPE_UINT },
+    { "r32ui",     MTLPixelFormatR32Uint,      1,  4, {32            }, RA_CTYPE_UINT },
+    { "rg32ui",    MTLPixelFormatRG32Uint,     2,  8, {32, 32        }, RA_CTYPE_UINT },
+    { "rgba32ui",  MTLPixelFormatRGBA32Uint,   4, 16, {32, 32, 32, 32}, RA_CTYPE_UINT },
+    { "rgb10a2ui", MTLPixelFormatRGB10A2Uint,  4,  4, {10, 10, 10,  2}, RA_CTYPE_UINT  },
+
+    // Float formats (native formats, hf = half float, df = double float)
+    { "r16f",      MTLPixelFormatR16Float,     1,  2, {16            }, RA_CTYPE_FLOAT }, // or hf?
+    { "rg16f",     MTLPixelFormatRG16Float,    2,  4, {16, 16        }, RA_CTYPE_FLOAT }, // or hf?
+    { "rgba16f",   MTLPixelFormatRGBA16Float,  4,  8, {16, 16, 16, 16}, RA_CTYPE_FLOAT }, // or hf?
+    { "r32f",      MTLPixelFormatR32Float,     1,  4, {32            }, RA_CTYPE_FLOAT },
+    { "rg32f",     MTLPixelFormatRG32Float,    2,  8, {32, 32        }, RA_CTYPE_FLOAT },
+    { "rgba32f",   MTLPixelFormatRGBA32Float,  4, 16, {32, 32, 32, 32}, RA_CTYPE_FLOAT },
+    { "rg11b10f",  MTLPixelFormatRG11B10Float, 3,  4, {11, 11, 10    }, RA_CTYPE_FLOAT },
+
+    // "Swapped" component order images
+    { "bgra8",     MTLPixelFormatBGRA8Unorm,   4,  4, { 8,  8,  8,  8}, RA_CTYPE_UNORM, true },
+    // only available on mac 10.13, macOS_GPUFamily1_v3
+    //{ "bgr10a2",   MTLPixelFormatBGR10A2Unorm, 4,  4, {10, 10, 10,  2}, RA_CTYPE_UNORM, true },
+};
+struct ra *ra_create_metal(id <MTLDevice> device, struct mp_log *log) {
     struct ra *ra = talloc_zero(NULL, struct ra);
     ra->log = log;
     ra->fns = &ra_fns_metal;
+
+    struct ra_metal *p = ra->priv = talloc_zero(ra, struct ra_metal);
+    p->device = device;
+
+    for (int i = 0; i < MP_ARRAY_SIZE(formats); i++) {
+        struct metal_fmt *metalfmt = &formats[i];
+
+        // all pixel formats can be used for reading and sampling
+        struct ra_format *fmt = talloc_zero(ra, struct ra_format);
+        *fmt = (struct ra_format) {
+            .name           = metalfmt->name,
+            .priv           = metalfmt,
+            .ctype          = metalfmt->ctype,
+            .ordered        = !metalfmt->unordered,
+            .num_components = metalfmt->components,
+            .pixel_size     = metalfmt->bytes,
+            .linear_filter  = true, // only available on macOS 10.13?
+            .renderable     = true,
+        };
+
+        for (int j = 0; j < metalfmt->components; j++)
+            fmt->component_size[j] = fmt->component_depth[j] = metalfmt->bits[j];
+
+        fmt->glsl_format = ra_fmt_glsl_format(fmt);
+
+        MP_TARRAY_APPEND(ra, ra->formats, ra->num_formats, fmt);
+    }
+
     return ra;
 }
 

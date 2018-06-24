@@ -21,7 +21,7 @@
 #include "ra_metal.h"
 
 struct priv {
-
+    id <MTLDevice> device;
 };
 
 
@@ -68,12 +68,14 @@ static bool metal_init(struct ra_ctx *ctx)
     struct priv *p = ctx->priv = talloc_zero(ctx, struct priv);
     //p->opts = mp_get_config_group(ctx, ctx->global, &d3d11_conf);
 
+    p->device = MTLCreateSystemDefaultDevice();
+
     struct ra_swapchain *sw = ctx->swapchain = talloc_zero(ctx, struct ra_swapchain);
     sw->priv = p;
     sw->ctx = ctx;
     sw->fns = &metal_swapchain;
 
-    ctx->ra = ra_create_metal(ctx->log);
+    ctx->ra = ra_create_metal(p->device, ctx->log);
 
 
     return true;
