@@ -17,6 +17,6 @@
 
 import Cocoa
 
-class WindowMetal: NSWindow, NSWindowDelegate {
+class Window: NSWindow, NSWindowDelegate {
 
 }

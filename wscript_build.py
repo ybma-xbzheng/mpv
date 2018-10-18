@@ -147,11 +147,12 @@ def build(ctx):
         tgt = task.outputs[0].abspath()
         header = task.outputs[1].abspath()
         module = task.outputs[2].abspath()
+        module_name = os.path.basename(module).rsplit(".", 1)[0]
 
-        cmd = ('%s %s -module-name macOS_swift -emit-module-path %s '
+        cmd = ('%s %s -module-name %s -emit-module-path %s '
                '-import-objc-header %s -emit-objc-header-path %s -o %s %s '
-               '-I. -I%s') % (ctx.env.SWIFT, ctx.env.SWIFT_FLAGS, module,
-                              bridge, header, tgt, src, ctx.srcnode.abspath())
+               '-I. -I%s') % (ctx.env.SWIFT, ctx.env.SWIFT_FLAGS, module_name,
+                              module, bridge, header, tgt, src, ctx.srcnode.abspath())
         return task.exec_command(cmd)
 
     if ctx.dependency_satisfied('macos-cocoa-cb'):
