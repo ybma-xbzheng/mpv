@@ -177,6 +177,28 @@ def build(ctx):
             '-Xlinker', '%s' % ctx.path.find_or_declare("osdep/macOS_swift.swiftmodule").abspath()
         ])
 
+    if True:
+        swift_source = [
+            ( "video/out/metal_common.swift" ),
+            ( "video/out/metal/view.swift" ),
+            ( "video/out/metal/window.swift" ),
+            ( "video/out/metal/layer.swift" ),
+        ]
+
+        ctx(
+            rule   = swift,
+            source = ctx.filtered_sources(swift_source),
+            target = ('video/out/metal_swift.o '
+                      'video/out/metal_swift.h '
+                      'video/out/metal_swift.swiftmodule'),
+            before = 'c',
+        )
+
+        ctx.env.append_value('LINKFLAGS', [
+            '-Xlinker', '-add_ast_path',
+            '-Xlinker', '%s' % ctx.path.find_or_declare("osdep/metal_swift.swiftmodule").abspath()
+        ])
+
     if ctx.dependency_satisfied('cplayer'):
         main_fn_c = ctx.pick_first_matching_dep([
             ( "osdep/main-fn-cocoa.c",               "cocoa" ),
@@ -439,6 +461,8 @@ def build(ctx):
         ( "video/out/gpu/utils.c" ),
         ( "video/out/gpu/video.c" ),
         ( "video/out/gpu/video_shaders.c" ),
+        ( "video/out/metal/context.m" ),
+        ( "video/out/metal/ra_metal.m" ),
         ( "video/out/opengl/angle_dynamic.c",    "egl-angle" ),
         ( "video/out/opengl/common.c",           "gl" ),
         ( "video/out/opengl/context.c",          "gl" ),
@@ -590,7 +614,7 @@ def build(ctx):
             target       = "mpv",
             source       = main_fn_c,
             use          = ctx.dependencies_use() + ['objects'],
-            add_object   = "osdep/macOS_swift.o",
+            add_object   = "osdep/macOS_swift.o video/out/metal_swift.o",
             includes     = _all_includes(ctx),
             features     = "c cprogram" + (" syms" if syms else ""),
             export_symbols_def = "libmpv/mpv.def", # for syms=True
